@@ -13,6 +13,8 @@ Route::post('/logout', [\App\Http\Controllers\Auth\LoginController::class, 'logo
 // Bitrix24 OAuth & Installation
 Route::post('/bitrix24/callback', [\App\Http\Controllers\Bitrix24Controller::class, 'installationCallback'])->name('bitrix24.callback');
 Route::match(['get', 'post'], '/bitrix24/oauth/callback', [\App\Http\Controllers\Bitrix24Controller::class, 'handleOAuthCallback'])->name('bitrix24.oauth.callback');
+Route::match(['get', 'post'], '/bitrix24/config', [\App\Http\Controllers\Bitrix24Controller::class, 'showConfig'])->name('bitrix24.config.show');
+Route::post('/bitrix24/config/save', [\App\Http\Controllers\Bitrix24Controller::class, 'saveConfig'])->name('bitrix24.config.save');
 
 Route::prefix('admin')->middleware('auth')->group(function () {
     Route::get('/tenants', [\App\Http\Controllers\Admin\TenantController::class, 'index'])->name('admin.tenants.index');

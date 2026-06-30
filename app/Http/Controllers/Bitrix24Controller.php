@@ -63,6 +63,89 @@ class Bitrix24Controller extends Controller
     }
 
     /**
+     * Show embedded configuration page in Bitrix24
+     */
+    public function showConfig(Request $request)
+    {
+        Log::info('Bitrix24 config page accessed', $request->all());
+
+        $domain = $request->input('DOMAIN', $request->input('domain'));
+        $memberId = $request->input('member_id');
+
+        if (!$domain && !$memberId) {
+            abort(400, 'Missing Bitrix24 parameters');
+        }
+
+        $bitrixAccount = null;
+        if ($domain) {
+            $bitrixAccount = TenantBitrixAccount::where('bitrix_domain', $domain)->first();
+        }
+        if (!$bitrixAccount && $memberId) {
+            $bitrixAccount = TenantBitrixAccount::where('member_id', $memberId)->first();
+        }
+
+        if (!$bitrixAccount) {
+            abort(404, 'Tenant not found');
+        }
+
+        $salestrailAccount = $bitrixAccount->tenant->salestrailAccount;
+
+        return view('bitrix24.config', compact('bitrixAccount', 'salestrailAccount'));
+    }
+
+    /**
+     * Save embedded configuration from Bitrix24
+     */
+    public function saveConfig(Request $request)
+    {
+        Log::info('Bitrix24 config save request', $request->all());
+
+        $request->validate([
+            'salestrail_user' => 'nullable|string',
+            'salestrail_password' => 'nullable|string',
+            'salestrail_api_key' => 'nullable|string',
+            'salestrail_api_url' => 'nullable|string',
+            'salestrail_webhook_secret' => 'nullable|string',
+            'DOMAIN' => 'nullable|string',
+            'member_id' => 'nullable|string',
+        ]);
+
+        $domain = $request->input('DOMAIN', $request->input('domain'));
+        $memberId = $request->input('member_id');
+
+        if (!$domain && !$memberId) {
+            abort(400, 'Missing Bitrix24 parameters');
+        }
+
+        $bitrixAccount = null;
+        if ($domain) {
+            $bitrixAccount = TenantBitrixAccount::where('bitrix_domain', $domain)->first();
+        }
+        if (!$bitrixAccount && $memberId) {
+            $bitrixAccount = TenantBitrixAccount::where('member_id', $memberId)->first();
+        }
+
+        if (!$bitrixAccount) {
+            abort(404, 'Tenant not found');
+        }
+
+        $tenant = $bitrixAccount->tenant;
+
+        $tenant->salestrailAccount()->updateOrCreate(
+            ['tenant_id' => $tenant->id],
+            [
+                'user' => $request->salestrail_user,
+                'password' => $request->salestrail_password,
+                'api_key' => $request->salestrail_api_key,
+                'api_url' => $request->salestrail_api_url,
+                'webhook_secret' => $request->salestrail_webhook_secret,
+            ]
+        );
+
+        return redirect()->back()->with('success', 'Salestrail settings saved successfully!');
+    }
+
+    /**
      * Start Bitrix24 OAuth 2.0 authorization flow
      */
     public function startOAuth(Request $request, int $tenantId)

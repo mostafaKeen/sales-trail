@@ -15,6 +15,8 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->validateCsrfTokens(except: [
             '/bitrix24/callback',
             '/bitrix24/oauth/callback',
+            '/bitrix24/config',
+            '/bitrix24/config/save',
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
