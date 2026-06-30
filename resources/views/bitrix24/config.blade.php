@@ -124,6 +124,25 @@
             </div>
         @endif
 
+        @if($errors->any())
+            <div style="background-color: rgba(239, 68, 68, 0.15); border: 1px solid var(--danger); color: var(--danger); padding: 1rem; border-radius: 0.75rem; margin-bottom: 1rem; font-weight: 500;">
+                <ul style="list-style: none; padding: 0;">
+                    @foreach($errors->all() as $error)
+                        <li>{{ $error }}</li>
+                    @endforeach
+                </ul>
+            </div>
+        @endif
+
+        <div class="card" style="margin-bottom: 1.5rem;">
+            <h3 style="margin-bottom: 1rem; color: var(--primary); font-size: 1rem;">Salestrail Integration Hook</h3>
+            <div style="display: flex; align-items: center; gap: 0.5rem; background-color: var(--bg-base); border: 1px solid var(--border); padding: 0.75rem 1rem; border-radius: 0.5rem;">
+                <span style="font-family: monospace; font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-grow: 1; color: var(--text-muted);" id="webhook-url">{{ url('/api/webhooks/' . $bitrixAccount->tenant->uuid . '/salestrail') }}</span>
+                <button type="button" style="background: none; border: none; color: var(--primary); cursor: pointer; font-size: 0.875rem; font-weight: 600; padding: 0.25rem; transition: var(--transition);" onclick="copyToClipboard()">Copy</button>
+            </div>
+            <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.5rem;">Use this URL in your Salestrail dashboard to send call data to this integration.</p>
+        </div>
+
         <div class="card">
             <form method="POST" action="{{ route('bitrix24.config.save') }}">
                 @csrf
@@ -167,5 +186,19 @@
             </form>
         </div>
     </div>
+
+    <script>
+        function copyToClipboard() {
+            const text = document.getElementById('webhook-url').innerText;
+            navigator.clipboard.writeText(text).then(() => {
+                const btn = document.querySelector('button[onclick="copyToClipboard()"]');
+                const oldText = btn.innerText;
+                btn.innerText = 'Copied!';
+                setTimeout(() => {
+                    btn.innerText = oldText;
+                }, 1500);
+            });
+        }
+    </script>
 </body>
 </html>

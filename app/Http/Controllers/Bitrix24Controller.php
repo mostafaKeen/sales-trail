@@ -101,11 +101,11 @@ class Bitrix24Controller extends Controller
         Log::info('Bitrix24 config save request', $request->all());
 
         $request->validate([
-            'salestrail_user' => 'nullable|string',
+            'salestrail_user' => 'required|string',
             'salestrail_password' => 'nullable|string',
-            'salestrail_api_key' => 'nullable|string',
-            'salestrail_api_url' => 'nullable|string',
-            'salestrail_webhook_secret' => 'nullable|string',
+            'salestrail_api_key' => 'required|string',
+            'salestrail_api_url' => 'required|url',
+            'salestrail_webhook_secret' => 'required|string',
             'DOMAIN' => 'nullable|string',
             'member_id' => 'nullable|string',
         ]);
@@ -131,15 +131,20 @@ class Bitrix24Controller extends Controller
 
         $tenant = $bitrixAccount->tenant;
 
+        $salestrailData = [
+            'user' => $request->salestrail_user,
+            'api_key' => $request->salestrail_api_key,
+            'api_url' => $request->salestrail_api_url,
+            'webhook_secret' => $request->salestrail_webhook_secret,
+        ];
+
+        if ($request->filled('salestrail_password')) {
+            $salestrailData['password'] = $request->salestrail_password;
+        }
+
         $tenant->salestrailAccount()->updateOrCreate(
             ['tenant_id' => $tenant->id],
-            [
-                'user' => $request->salestrail_user,
-                'password' => $request->salestrail_password,
-                'api_key' => $request->salestrail_api_key,
-                'api_url' => $request->salestrail_api_url,
-                'webhook_secret' => $request->salestrail_webhook_secret,
-            ]
+            $salestrailData
         );
 
         return redirect()->back()->with('success', 'Salestrail settings saved successfully!');
