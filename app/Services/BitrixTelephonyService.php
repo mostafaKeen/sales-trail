@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\TenantBitrixAccount;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Exception;
 
 class BitrixTelephonyService
