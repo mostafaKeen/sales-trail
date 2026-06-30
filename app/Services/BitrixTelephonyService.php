@@ -144,32 +144,37 @@ class BitrixTelephonyService
      */
     public function searchCrmEntity(TenantBitrixAccount $account, string $phone): ?array
     {
-        // Search in Contacts first
-        $contactResponse = $this->callMethod($account, 'crm.contact.list', [
-            'filter' => ['PHONE' => $phone],
-            'select' => ['ID', 'ASSIGNED_BY_ID']
-        ]);
+        try {
+            // Search in Contacts first
+            $contactResponse = $this->callMethod($account, 'crm.contact.list', [
+                'filter' => ['PHONE' => $phone],
+                'select' => ['ID', 'ASSIGNED_BY_ID']
+            ]);
 
-        if (!empty($contactResponse['result'])) {
-            return [
-                'ENTITY_TYPE' => 'CONTACT',
-                'ENTITY_ID' => $contactResponse['result'][0]['ID'],
-                'ASSIGNED_BY_ID' => $contactResponse['result'][0]['ASSIGNED_BY_ID']
-            ];
-        }
+            if (!empty($contactResponse['result'])) {
+                return [
+                    'ENTITY_TYPE' => 'CONTACT',
+                    'ENTITY_ID' => $contactResponse['result'][0]['ID'],
+                    'ASSIGNED_BY_ID' => $contactResponse['result'][0]['ASSIGNED_BY_ID']
+                ];
+            }
 
-        // Then search in Leads
-        $leadResponse = $this->callMethod($account, 'crm.lead.list', [
-            'filter' => ['PHONE' => $phone],
-            'select' => ['ID', 'ASSIGNED_BY_ID']
-        ]);
+            // Then search in Leads
+            $leadResponse = $this->callMethod($account, 'crm.lead.list', [
+                'filter' => ['PHONE' => $phone],
+                'select' => ['ID', 'ASSIGNED_BY_ID']
+            ]);
 
-        if (!empty($leadResponse['result'])) {
-            return [
-                'ENTITY_TYPE' => 'LEAD',
-                'ENTITY_ID' => $leadResponse['result'][0]['ID'],
-                'ASSIGNED_BY_ID' => $leadResponse['result'][0]['ASSIGNED_BY_ID']
-            ];
+            if (!empty($leadResponse['result'])) {
+                return [
+                    'ENTITY_TYPE' => 'LEAD',
+                    'ENTITY_ID' => $leadResponse['result'][0]['ID'],
+                    'ASSIGNED_BY_ID' => $leadResponse['result'][0]['ASSIGNED_BY_ID']
+                ];
+            }
+        } catch (Exception $e) {
+            // Log the error and return null to proceed with creation if search fails due to permissions/scope
+            Log::warning("Bitrix24 CRM search failed: " . $e->getMessage());
         }
 
         return null;
@@ -180,15 +185,20 @@ class BitrixTelephonyService
      */
     public function createLead(TenantBitrixAccount $account, array $data): int
     {
-        $response = $this->callMethod($account, 'crm.lead.add', [
-            'fields' => [
-                'TITLE' => $data['title'] ?? 'New Lead from Salestrail',
-                'NAME' => $data['name'] ?? 'Unknown',
-                'PHONE' => [['VALUE' => $data['phone'], 'VALUE_TYPE' => 'WORK']],
-                'ASSIGNED_BY_ID' => $data['assigned_by_id'] ?? null,
-            ]
-        ]);
+        try {
+            $response = $this->callMethod($account, 'crm.lead.add', [
+                'fields' => [
+                    'TITLE' => $data['title'] ?? 'New Lead from Salestrail',
+                    'NAME' => $data['name'] ?? 'Unknown',
+                    'PHONE' => [['VALUE' => $data['phone'], 'VALUE_TYPE' => 'WORK']],
+                    'ASSIGNED_BY_ID' => $data['assigned_by_id'] ?? null,
+                ]
+            ]);
 
-        return (int)$response['result'];
+            return (int)$response['result'];
+        } catch (Exception $e) {
+            Log::error("Failed to create Bitrix24 lead: " . $e->getMessage());
+            throw $e;
+        }
     }
 }
