@@ -28,31 +28,36 @@ class Bitrix24Controller extends Controller
             'scope' => 'nullable|string',
         ]);
 
-        // Find tenant by domain or member_id (if we have it stored)
-        $tenant = Tenant::whereHas('bitrixAccount', function ($q) use ($validated) {
-            $q->where('bitrix_domain', $validated['domain'])
-                ->orWhere('member_id', $validated['member_id']);
-        })->first();
+        // First check for existing bitrix account
+        $bitrixAccount = TenantBitrixAccount::where('bitrix_domain', $validated['domain'])
+            ->orWhere('member_id', $validated['member_id'])
+            ->first();
 
-        // If no tenant found, create one (or you might want to handle this differently)
-        if (!$tenant) {
-            $tenant = Tenant::create([
-                'company_name' => 'Bitrix24 Tenant - ' . $validated['domain'],
-                'uuid' => (string) \Illuminate\Support\Str::uuid(),
-                'status' => 'active',
-            ]);
-        }
-
-        $tenant->bitrixAccount()->updateOrCreate(
-            ['tenant_id' => $tenant->id],
-            [
+        if ($bitrixAccount) {
+            // Reinstall - update existing account
+            $bitrixAccount->update([
                 'bitrix_domain' => $validated['domain'],
                 'member_id' => $validated['member_id'],
                 'access_token' => $validated['access_token'],
                 'refresh_token' => $validated['refresh_token'],
                 'webhook_url' => $validated['client_endpoint'] ?? null,
-            ]
-        );
+            ]);
+        } else {
+            // Create new tenant and bitrix account
+            $tenant = Tenant::create([
+                'company_name' => 'Bitrix24 Tenant - ' . $validated['domain'],
+                'uuid' => (string) \Illuminate\Support\Str::uuid(),
+                'status' => 'active',
+            ]);
+
+            $tenant->bitrixAccount()->create([
+                'bitrix_domain' => $validated['domain'],
+                'member_id' => $validated['member_id'],
+                'access_token' => $validated['access_token'],
+                'refresh_token' => $validated['refresh_token'],
+                'webhook_url' => $validated['client_endpoint'] ?? null,
+            ]);
+        }
 
         return response()->json(['status' => 'success', 'message' => 'Tokens saved successfully']);
     }
@@ -96,32 +101,39 @@ class Bitrix24Controller extends Controller
             $memberId = $request->input('member_id');
             $accessToken = $request->input('AUTH_ID');
             $refreshToken = $request->input('REFRESH_ID');
-            $serverEndpoint = $request->input('SERVER_ENDPOINT');
+            $serverEndpoint = trim($request->input('SERVER_ENDPOINT', ''));
 
-            // Find tenant by domain or member_id
-            $tenant = Tenant::whereHas('bitrixAccount', function ($q) use ($domain, $memberId) {
-                $q->where('bitrix_domain', $domain)
-                    ->orWhere('member_id', $memberId);
-            })->first();
+            // First, check if there's an existing bitrix account with this domain or member_id
+            $bitrixAccount = TenantBitrixAccount::where('bitrix_domain', $domain)
+                ->orWhere('member_id', $memberId)
+                ->first();
 
-            if (!$tenant) {
-                // Create tenant if not found
+            if ($bitrixAccount) {
+                // Reinstall - update existing account and get the existing tenant
+                $tenant = $bitrixAccount->tenant;
+                $bitrixAccount->update([
+                    'bitrix_domain' => $domain,
+                    'member_id' => $memberId,
+                    'access_token' => $accessToken,
+                    'refresh_token' => $refreshToken,
+                    'webhook_url' => $serverEndpoint,
+                ]);
+            } else {
+                // Create new tenant and bitrix account
                 $tenant = Tenant::create([
                     'company_name' => 'Bitrix24 Tenant - ' . $domain,
                     'uuid' => (string) \Illuminate\Support\Str::uuid(),
                     'status' => 'active',
                 ]);
+
+                $bitrixAccount = $tenant->bitrixAccount()->create([
+                    'bitrix_domain' => $domain,
+                    'member_id' => $memberId,
+                    'access_token' => $accessToken,
+                    'refresh_token' => $refreshToken,
+                    'webhook_url' => $serverEndpoint,
+                ]);
             }
-
-            $bitrixAccount = $tenant->bitrixAccount ?? $tenant->bitrixAccount()->create(['tenant_id' => $tenant->id]);
-
-            $bitrixAccount->update([
-                'bitrix_domain' => $domain,
-                'member_id' => $memberId,
-                'access_token' => $accessToken,
-                'refresh_token' => $refreshToken,
-                'webhook_url' => $serverEndpoint,
-            ]);
 
             return response('OK');
         }
