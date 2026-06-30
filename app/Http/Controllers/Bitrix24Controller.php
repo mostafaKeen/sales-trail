@@ -218,7 +218,13 @@ class Bitrix24Controller extends Controller
                 ]);
             }
 
-            return response('OK');
+            return redirect()->route('bitrix24.config.show', [
+                'DOMAIN' => $domain,
+                'member_id' => $memberId,
+                'APP_SID' => $request->input('APP_SID'),
+                'LANG' => $request->input('LANG'),
+                'PROTOCOL' => $request->input('PROTOCOL'),
+            ]);
         }
 
         // Otherwise, handle the OAuth 2.0 code flow
