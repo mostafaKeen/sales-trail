@@ -90,6 +90,43 @@ class Bitrix24Controller extends Controller
     {
         Log::info('Bitrix24 OAuth callback received', $request->all());
 
+        // Check if this is the direct POST from Bitrix24 interface (with AUTH_ID)
+        if ($request->has('AUTH_ID') && $request->has('DOMAIN') && $request->has('member_id')) {
+            $domain = $request->input('DOMAIN');
+            $memberId = $request->input('member_id');
+            $accessToken = $request->input('AUTH_ID');
+            $refreshToken = $request->input('REFRESH_ID');
+            $serverEndpoint = $request->input('SERVER_ENDPOINT');
+
+            // Find tenant by domain or member_id
+            $tenant = Tenant::whereHas('bitrixAccount', function ($q) use ($domain, $memberId) {
+                $q->where('bitrix_domain', $domain)
+                    ->orWhere('member_id', $memberId);
+            })->first();
+
+            if (!$tenant) {
+                // Create tenant if not found
+                $tenant = Tenant::create([
+                    'company_name' => 'Bitrix24 Tenant - ' . $domain,
+                    'uuid' => (string) \Illuminate\Support\Str::uuid(),
+                    'status' => 'active',
+                ]);
+            }
+
+            $bitrixAccount = $tenant->bitrixAccount ?? $tenant->bitrixAccount()->create(['tenant_id' => $tenant->id]);
+
+            $bitrixAccount->update([
+                'bitrix_domain' => $domain,
+                'member_id' => $memberId,
+                'access_token' => $accessToken,
+                'refresh_token' => $refreshToken,
+                'webhook_url' => $serverEndpoint,
+            ]);
+
+            return response('OK');
+        }
+
+        // Otherwise, handle the OAuth 2.0 code flow
         $validated = $request->validate([
             'code' => 'required|string',
             'state' => 'required|string',
