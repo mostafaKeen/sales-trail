@@ -28,7 +28,7 @@ class SalestrailWebhookController
         \App\Domains\Tenant\TenantContext::set($tenant);
 
         $data = $request->all();
-        $callId = $data['id'] ?? $data['call_id'] ?? null;
+        $callId = $data['callId'] ?? $data['id'] ?? $data['call_id'] ?? null;
 
         // Check if tenant is active
         if ($tenant->status !== 'active') {

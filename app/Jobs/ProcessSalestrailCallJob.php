@@ -33,7 +33,7 @@ class ProcessSalestrailCallJob implements ShouldQueue
         $tenant = Tenant::findOrFail($this->tenantId);
         TenantContext::set($tenant);
 
-        $salestrailCallId = $this->payload['id'] ?? $this->payload['call_id'] ?? null;
+        $salestrailCallId = $this->payload['callId'] ?? $this->payload['id'] ?? $this->payload['call_id'] ?? null;
         if (!$salestrailCallId) {
             Log::warning("Salestrail payload missing call ID", ['payload' => $this->payload]);
             return;
@@ -46,13 +46,13 @@ class ProcessSalestrailCallJob implements ShouldQueue
         ]);
 
         // Map payload fields
-        $call->employee_phone = $this->payload['employee_phone'] ?? $call->employee_phone ?? '';
-        $call->customer_phone = $this->payload['customer_phone'] ?? $this->payload['phone_number'] ?? '';
+        $call->employee_phone = $this->payload['userPhone'] ?? $this->payload['employee_phone'] ?? $call->employee_phone ?? '';
+        $call->customer_phone = $this->payload['formattedNumber'] ?? $this->payload['number'] ?? $this->payload['customer_phone'] ?? $this->payload['phone_number'] ?? '';
         $call->inbound = isset($this->payload['inbound']) ? (bool)$this->payload['inbound'] : (strcasecmp($this->payload['direction'] ?? '', 'inbound') === 0);
         $call->answered = (bool)($this->payload['answered'] ?? false);
         $call->duration = (int)($this->payload['duration'] ?? 0);
         $call->recording_url = $this->payload['recording_url'] ?? $call->recording_url;
-        $call->started_at = isset($this->payload['started_at']) ? \Illuminate\Support\Carbon::parse($this->payload['started_at']) : now();
+        $call->started_at = isset($this->payload['startTime']) ? \Illuminate\Support\Carbon::parse($this->payload['startTime']) : (isset($this->payload['started_at']) ? \Illuminate\Support\Carbon::parse($this->payload['started_at']) : now());
         $call->finished_at = isset($this->payload['finished_at']) ? \Illuminate\Support\Carbon::parse($this->payload['finished_at']) : now();
         $call->payload = $this->payload;
         $call->save();
@@ -64,8 +64,8 @@ class ProcessSalestrailCallJob implements ShouldQueue
         }
 
         // Resolve user mapping
-        $salestrailUserId = $this->payload['user_id'] ?? null;
-        $salestrailEmail = $this->payload['user_email'] ?? null;
+        $salestrailUserId = $this->payload['userId'] ?? $this->payload['user_id'] ?? null;
+        $salestrailEmail = $this->payload['userEmail'] ?? $this->payload['user_email'] ?? null;
         
         $mapping = TenantUserMapping::where('tenant_id', $tenant->id)
             ->when($salestrailUserId, fn($q) => $q->where('salestrail_user_id', $salestrailUserId))
