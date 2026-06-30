@@ -86,7 +86,7 @@ class BitrixTelephonyService
      */
     public function registerCall(TenantBitrixAccount $account, array $data): array
     {
-        return $this->callMethod($account, 'telephony.externalCall.register', [
+        $params = [
             'USER_ID' => $data['bitrix_user_id'] ?? null,
             'USER_PHONE_INNER' => $data['employee_phone'] ?? null,
             'PHONE_NUMBER' => $data['customer_phone'],
@@ -94,7 +94,15 @@ class BitrixTelephonyService
             'LINE_NUMBER' => $account->external_line_id ?? $data['line_number'] ?? null,
             'EXTERNAL_CALL_ID' => $data['salestrail_call_id'],
             'SHOW' => $data['show'] ?? 0,
-        ]);
+        ];
+
+        if (!empty($data['crm_entity_type']) && !empty($data['crm_entity_id'])) {
+            $params['CRM_ENTITY_TYPE'] = $data['crm_entity_type'];
+            $params['CRM_ENTITY_ID'] = $data['crm_entity_id'];
+            $params['CRM_CREATE'] = 0; // We already handled creation
+        }
+
+        return $this->callMethod($account, 'telephony.externalCall.register', $params);
     }
 
     /**
@@ -129,5 +137,58 @@ class BitrixTelephonyService
             'FILENAME' => $fileName,
             'FILE_CONTENT' => $fileContent,
         ]);
+    }
+
+    /**
+     * Search for a CRM entity (Lead or Contact) by phone number.
+     */
+    public function searchCrmEntity(TenantBitrixAccount $account, string $phone): ?array
+    {
+        // Search in Contacts first
+        $contactResponse = $this->callMethod($account, 'crm.contact.list', [
+            'filter' => ['PHONE' => $phone],
+            'select' => ['ID', 'ASSIGNED_BY_ID']
+        ]);
+
+        if (!empty($contactResponse['result'])) {
+            return [
+                'ENTITY_TYPE' => 'CONTACT',
+                'ENTITY_ID' => $contactResponse['result'][0]['ID'],
+                'ASSIGNED_BY_ID' => $contactResponse['result'][0]['ASSIGNED_BY_ID']
+            ];
+        }
+
+        // Then search in Leads
+        $leadResponse = $this->callMethod($account, 'crm.lead.list', [
+            'filter' => ['PHONE' => $phone],
+            'select' => ['ID', 'ASSIGNED_BY_ID']
+        ]);
+
+        if (!empty($leadResponse['result'])) {
+            return [
+                'ENTITY_TYPE' => 'LEAD',
+                'ENTITY_ID' => $leadResponse['result'][0]['ID'],
+                'ASSIGNED_BY_ID' => $leadResponse['result'][0]['ASSIGNED_BY_ID']
+            ];
+        }
+
+        return null;
+    }
+
+    /**
+     * Create a new Lead.
+     */
+    public function createLead(TenantBitrixAccount $account, array $data): int
+    {
+        $response = $this->callMethod($account, 'crm.lead.add', [
+            'fields' => [
+                'TITLE' => $data['title'] ?? 'New Lead from Salestrail',
+                'NAME' => $data['name'] ?? 'Unknown',
+                'PHONE' => [['VALUE' => $data['phone'], 'VALUE_TYPE' => 'WORK']],
+                'ASSIGNED_BY_ID' => $data['assigned_by_id'] ?? null,
+            ]
+        ]);
+
+        return (int)$response['result'];
     }
 }

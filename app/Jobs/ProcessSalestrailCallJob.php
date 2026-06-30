@@ -77,12 +77,32 @@ class ProcessSalestrailCallJob implements ShouldQueue
         // Register call on Bitrix if not yet done
         if (!$call->synced_to_bitrix || empty($call->bitrix_call_id)) {
             try {
+                // 1. Search for CRM entity (Lead/Contact)
+                $crmEntity = $bitrixService->searchCrmEntity($bitrixAccount, $call->customer_phone);
+
+                if (!$crmEntity) {
+                    // 2. Create lead if not found
+                    $leadId = $bitrixService->createLead($bitrixAccount, [
+                        'phone' => $call->customer_phone,
+                        'name' => $this->payload['phoneBookName'] ?? 'New Salestrail Contact',
+                        'assigned_by_id' => $bitrixUserId,
+                    ]);
+                    $crmEntity = [
+                        'ENTITY_TYPE' => 'LEAD',
+                        'ENTITY_ID' => $leadId,
+                        'ASSIGNED_BY_ID' => $bitrixUserId
+                    ];
+                }
+
+                // 3. Register the call
                 $registerResponse = $bitrixService->registerCall($bitrixAccount, [
                     'bitrix_user_id' => $bitrixUserId,
                     'employee_phone' => $call->employee_phone,
                     'customer_phone' => $call->customer_phone,
                     'type' => $call->inbound ? 2 : 1,
                     'salestrail_call_id' => $call->salestrail_call_id,
+                    'crm_entity_type' => $crmEntity['ENTITY_TYPE'],
+                    'crm_entity_id' => $crmEntity['ENTITY_ID'],
                 ]);
 
                 $bitrixCallId = $registerResponse['result']['CALL_ID'] ?? null;
