@@ -14,6 +14,11 @@ class BitrixTelephonyService
      */
     public function callMethod(TenantBitrixAccount $account, string $method, array $params): array
     {
+        // Ensure method has .json extension
+        if (!str_ends_with(strtolower($method), '.json')) {
+            $method .= '.json';
+        }
+
         if (!empty($account->webhook_url)) {
             $url = rtrim($account->webhook_url, '/') . '/' . $method;
             $response = Http::post($url, $params);
