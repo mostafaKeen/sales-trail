@@ -139,6 +139,56 @@ class TenantWebhookCallSyncTest extends TestCase
         TenantContext::clear();
     }
 
+    public function test_webhook_authenticates_with_valid_basic_auth(): void
+    {
+        Queue::fake();
+
+        // Configure Basic Auth on the account
+        $this->tenantA->salestrailAccount->update([
+            'user' => 'valid-user',
+            'password' => 'valid-pass',
+        ]);
+
+        $payload = [
+            'id' => 'call-uuid-123',
+            'phone_number' => '+1234567890',
+        ];
+
+        // Send request with Basic Auth credentials using Server Variables
+        $response = $this->withServerVariables([
+            'PHP_AUTH_USER' => 'valid-user',
+            'PHP_AUTH_PW' => 'valid-pass',
+        ])->postJson("/api/webhooks/{$this->tenantA->uuid}/salestrail", $payload);
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('status', 'queued');
+    }
+
+    public function test_webhook_fails_with_invalid_basic_auth(): void
+    {
+        // Configure Basic Auth on the account
+        $this->tenantA->salestrailAccount->update([
+            'user' => 'valid-user',
+            'password' => 'valid-pass',
+        ]);
+
+        $payload = ['id' => 'call-uuid-123'];
+
+        // Send request with incorrect Basic Auth server variables
+        $response = $this->withServerVariables([
+            'PHP_AUTH_USER' => 'invalid-user',
+            'PHP_AUTH_PW' => 'invalid-pass',
+        ])->postJson("/api/webhooks/{$this->tenantA->uuid}/salestrail", $payload);
+
+        $response->assertStatus(401);
+
+        // Verify failure logged
+        TenantContext::set($this->tenantA);
+        $this->assertEquals(1, SyncLog::count());
+        $this->assertEquals('invalid_signature', SyncLog::first()->status);
+        TenantContext::clear();
+    }
+
     public function test_job_processes_call_sync_to_bitrix(): void
     {
         Http::fake([

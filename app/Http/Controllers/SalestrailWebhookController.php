@@ -57,28 +57,47 @@ class SalestrailWebhookController
             'signature_header' => $signature,
         ]);
         
-        // Optional webhook signature verification
-        if ($salestrailAccount && !empty($salestrailAccount->webhook_secret)) {
-            if (!$this->salestrailService->verifyWebhook($payload, $signature, $salestrailAccount->webhook_secret)) {
-                $computed = hash_hmac('sha256', $payload, $salestrailAccount->webhook_secret);
-                \App\Models\SyncLog::create([
-                    'tenant_id' => $tenant->id,
-                    'call_id' => $callId,
-                    'action' => 'webhook_receive',
-                    'request' => $data,
-                    'response' => [
-                        'error' => 'Unauthorized signature verification failed.',
+        // Optional webhook signature or Basic Auth verification
+        if ($salestrailAccount) {
+            // Check Basic Auth if configured
+            if (!empty($salestrailAccount->user) && !empty($salestrailAccount->password)) {
+                if ($request->getUser() !== $salestrailAccount->user || $request->getPassword() !== $salestrailAccount->password) {
+                    \App\Models\SyncLog::create([
+                        'tenant_id' => $tenant->id,
+                        'call_id' => $callId,
+                        'action' => 'webhook_receive',
+                        'request' => $data,
+                        'response' => ['error' => 'Unauthorized Basic Authentication failed.'],
+                        'status' => 'invalid_signature',
+                    ]);
+                    Log::warning("Unauthorized Basic Authentication webhook request for tenant UUID: {$uuid}");
+                    \App\Domains\Tenant\TenantContext::clear();
+                    return response()->json(['error' => 'Unauthorized Basic Authentication failed.'], 401);
+                }
+            } 
+            // Fallback to signature check if webhook_secret is configured (and basic auth is not)
+            elseif (!empty($salestrailAccount->webhook_secret)) {
+                if (!$this->salestrailService->verifyWebhook($payload, $signature, $salestrailAccount->webhook_secret)) {
+                    $computed = hash_hmac('sha256', $payload, $salestrailAccount->webhook_secret);
+                    \App\Models\SyncLog::create([
+                        'tenant_id' => $tenant->id,
+                        'call_id' => $callId,
+                        'action' => 'webhook_receive',
+                        'request' => $data,
+                        'response' => [
+                            'error' => 'Unauthorized signature verification failed.',
+                            'header_signature' => $signature,
+                            'computed_signature' => $computed,
+                        ],
+                        'status' => 'invalid_signature',
+                    ]);
+                    Log::warning("Unauthorized webhook request for tenant UUID: {$uuid}", [
                         'header_signature' => $signature,
                         'computed_signature' => $computed,
-                    ],
-                    'status' => 'invalid_signature',
-                ]);
-                Log::warning("Unauthorized webhook request for tenant UUID: {$uuid}", [
-                    'header_signature' => $signature,
-                    'computed_signature' => $computed,
-                ]);
-                \App\Domains\Tenant\TenantContext::clear();
-                return response()->json(['error' => 'Unauthorized signature verification failed.'], 403);
+                    ]);
+                    \App\Domains\Tenant\TenantContext::clear();
+                    return response()->json(['error' => 'Unauthorized signature verification failed.'], 403);
+                }
             }
         }
 
