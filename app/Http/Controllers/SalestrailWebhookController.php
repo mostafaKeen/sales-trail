@@ -46,21 +46,37 @@ class SalestrailWebhookController
 
         $salestrailAccount = $tenant->salestrailAccount;
         
+        $signature = $request->header('X-Salestrail-Signature') ?? '';
+        $payload = $request->getContent();
+
+        Log::info("Incoming Salestrail webhook request", [
+            'uuid' => $uuid,
+            'headers' => array_map(fn($v) => is_array($v) ? implode(', ', $v) : $v, $request->headers->all()),
+            'payload' => $data,
+            'raw_content' => $payload,
+            'signature_header' => $signature,
+        ]);
+        
         // Optional webhook signature verification
         if ($salestrailAccount && !empty($salestrailAccount->webhook_secret)) {
-            $signature = $request->header('X-Salestrail-Signature') ?? '';
-            $payload = $request->getContent();
-
             if (!$this->salestrailService->verifyWebhook($payload, $signature, $salestrailAccount->webhook_secret)) {
+                $computed = hash_hmac('sha256', $payload, $salestrailAccount->webhook_secret);
                 \App\Models\SyncLog::create([
                     'tenant_id' => $tenant->id,
                     'call_id' => $callId,
                     'action' => 'webhook_receive',
                     'request' => $data,
-                    'response' => ['error' => 'Unauthorized signature verification failed.'],
+                    'response' => [
+                        'error' => 'Unauthorized signature verification failed.',
+                        'header_signature' => $signature,
+                        'computed_signature' => $computed,
+                    ],
                     'status' => 'invalid_signature',
                 ]);
-                Log::warning("Unauthorized webhook request for tenant UUID: {$uuid}");
+                Log::warning("Unauthorized webhook request for tenant UUID: {$uuid}", [
+                    'header_signature' => $signature,
+                    'computed_signature' => $computed,
+                ]);
                 \App\Domains\Tenant\TenantContext::clear();
                 return response()->json(['error' => 'Unauthorized signature verification failed.'], 403);
             }
