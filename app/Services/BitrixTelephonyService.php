@@ -16,6 +16,11 @@ class BitrixTelephonyService
     {
         if (!empty($account->webhook_url)) {
             $url = rtrim($account->webhook_url, '/') . '/' . $method;
+
+            // Ensure the domain is the tenant's specific portal domain, not the central oauth server
+            if (parse_url($url, PHP_URL_HOST) === 'oauth.bitrix.info') {
+                $url = str_replace('oauth.bitrix.info', $account->bitrix_domain, $url);
+            }
             
             $loggedUrl = preg_replace('/\/rest\/\d+\/[^\/]+/', '/rest/[user_id]/[webhook_token]', $url);
             Log::info("Sending Bitrix24 REST API request (Webhook)", [
