@@ -22,8 +22,6 @@ class TenantBitrixAccount extends Model
     ];
 
     protected $casts = [
-        'client_id' => 'encrypted',
-        'client_secret' => 'encrypted',
         'access_token' => 'encrypted',
         'refresh_token' => 'encrypted',
     ];
