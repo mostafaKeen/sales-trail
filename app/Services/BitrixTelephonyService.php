@@ -143,14 +143,16 @@ class BitrixTelephonyService
         ]);
     }
 
-    /**
-     * Register a call in Bitrix24.
-     */
     public function registerCall(TenantBitrixAccount $account, array $data): array
     {
+        $innerPhone = $data['employee_phone'] ?? null;
+        if ($innerPhone && (str_starts_with($innerPhone, '+') || strlen($innerPhone) > 6)) {
+            $innerPhone = null;
+        }
+
         $params = [
             'USER_ID' => $data['bitrix_user_id'] ?? null,
-            'USER_PHONE_INNER' => $data['employee_phone'] ?? null,
+            'USER_PHONE_INNER' => $innerPhone,
             'PHONE_NUMBER' => $data['customer_phone'],
             'TYPE' => $data['type'] ?? 2, // 2 = inbound, 1 = outbound
             'LINE_NUMBER' => $account->external_line_id ?? $data['line_number'] ?? null,
@@ -172,10 +174,15 @@ class BitrixTelephonyService
      */
     public function finishCall(TenantBitrixAccount $account, string $bitrixCallId, array $data): array
     {
+        $innerPhone = $data['employee_phone'] ?? null;
+        if ($innerPhone && (str_starts_with($innerPhone, '+') || strlen($innerPhone) > 6)) {
+            $innerPhone = null;
+        }
+
         return $this->callMethod($account, 'telephony.externalCall.finish', [
             'CALL_ID' => $bitrixCallId,
             'USER_ID' => $data['bitrix_user_id'] ?? null,
-            'USER_PHONE_INNER' => $data['employee_phone'] ?? null,
+            'USER_PHONE_INNER' => $innerPhone,
             'DURATION' => (int) ($data['duration'] ?? 0),
             'STATUS_CODE' => $data['status_code'] ?? '200',
             'ADD_TO_CHAT' => $data['add_to_chat'] ?? 0,
@@ -201,27 +208,10 @@ class BitrixTelephonyService
         ]);
     }
 
-    /**
-     * Search for a CRM entity (Lead or Contact) by phone number.
-     */
     public function searchCrmEntity(TenantBitrixAccount $account, string $phone): ?array
     {
         try {
-            // Search in Contacts first
-            $contactResponse = $this->callMethod($account, 'crm.contact.list', [
-                'filter' => ['PHONE' => $phone],
-                'select' => ['ID', 'ASSIGNED_BY_ID']
-            ]);
-
-            if (!empty($contactResponse['result'])) {
-                return [
-                    'ENTITY_TYPE' => 'CONTACT',
-                    'ENTITY_ID' => $contactResponse['result'][0]['ID'],
-                    'ASSIGNED_BY_ID' => $contactResponse['result'][0]['ASSIGNED_BY_ID']
-                ];
-            }
-
-            // Then search in Leads
+            // Search in Leads only (ignoring Contacts as per request)
             $leadResponse = $this->callMethod($account, 'crm.lead.list', [
                 'filter' => ['PHONE' => $phone],
                 'select' => ['ID', 'ASSIGNED_BY_ID']

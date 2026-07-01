@@ -74,6 +74,26 @@ class ProcessSalestrailCallJob implements ShouldQueue
 
         $bitrixUserId = $mapping?->bitrix_user_id;
 
+        // Dynamically resolve Bitrix24 User ID by email if not mapped
+        if (empty($bitrixUserId) && !empty($salestrailEmail)) {
+            try {
+                $userResponse = $bitrixService->callMethod($bitrixAccount, 'user.get', [
+                    'filter' => ['EMAIL' => $salestrailEmail]
+                ]);
+                if (!empty($userResponse['result'])) {
+                    $bitrixUserId = $userResponse['result'][0]['ID'];
+                    TenantUserMapping::create([
+                        'tenant_id' => $tenant->id,
+                        'salestrail_user_id' => $salestrailUserId,
+                        'salestrail_email' => $salestrailEmail,
+                        'bitrix_user_id' => $bitrixUserId,
+                    ]);
+                }
+            } catch (\Throwable $e) {
+                Log::warning("Failed to dynamically resolve Bitrix24 user by email {$salestrailEmail}: " . $e->getMessage());
+            }
+        }
+
         // Register call on Bitrix if not yet done
         if (!$call->synced_to_bitrix || empty($call->bitrix_call_id)) {
             try {
