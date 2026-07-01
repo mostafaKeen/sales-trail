@@ -14,7 +14,16 @@ class BitrixTelephonyService
      */
     public function callMethod(TenantBitrixAccount $account, string $method, array $params): array
     {
+        // Check if we have a valid incoming webhook URL (contains /rest/user_id/token)
+        $isWebhook = false;
         if (!empty($account->webhook_url)) {
+            // A real webhook URL has format like https://domain.bitrix24.com/rest/1/webhook-token/
+            if (preg_match('/\/rest\/\d+\/[^\/]+/', $account->webhook_url)) {
+                $isWebhook = true;
+            }
+        }
+
+        if ($isWebhook) {
             $url = rtrim($account->webhook_url, '/') . '/' . $method;
 
             // Ensure the domain is the tenant's specific portal domain, not the central oauth server
