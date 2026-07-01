@@ -152,6 +152,15 @@ class TenantWebhookCallSyncTest extends TestCase
             'https://comp-a.bitrix24.com/rest/1/webhook-token-a/telephony.externalCall.attachRecord' => Http::response([
                 'result' => ['FILE_ID' => 555]
             ], 200),
+            'https://comp-a.bitrix24.com/rest/1/webhook-token-a/crm.contact.list' => Http::response([
+                'result' => []
+            ], 200),
+            'https://comp-a.bitrix24.com/rest/1/webhook-token-a/crm.lead.list' => Http::response([
+                'result' => []
+            ], 200),
+            'https://comp-a.bitrix24.com/rest/1/webhook-token-a/crm.lead.add' => Http::response([
+                'result' => 12345
+            ], 200),
         ]);
 
         $payload = [

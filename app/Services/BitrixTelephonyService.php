@@ -14,14 +14,23 @@ class BitrixTelephonyService
      */
     public function callMethod(TenantBitrixAccount $account, string $method, array $params): array
     {
-        // Ensure method has .json extension
-        if (!str_ends_with(strtolower($method), '.json')) {
-            $method .= '.json';
-        }
-
         if (!empty($account->webhook_url)) {
             $url = rtrim($account->webhook_url, '/') . '/' . $method;
+            
+            $loggedUrl = preg_replace('/\/rest\/\d+\/[^\/]+/', '/rest/[user_id]/[webhook_token]', $url);
+            Log::info("Sending Bitrix24 REST API request (Webhook)", [
+                'method' => $method,
+                'url' => $loggedUrl,
+                'params' => $params,
+            ]);
+
             $response = Http::post($url, $params);
+
+            Log::info("Received Bitrix24 REST API response", [
+                'method' => $method,
+                'status' => $response->status(),
+                'body' => $response->json() ?? $response->body(),
+            ]);
         } else {
             if (empty($account->access_token)) {
                 throw new Exception("No access token or webhook URL configured for Bitrix24.");
@@ -31,13 +40,46 @@ class BitrixTelephonyService
             
             // Add auth token
             $params['auth'] = $account->access_token;
+
+            $loggedParams = $params;
+            if (isset($loggedParams['auth'])) {
+                $loggedParams['auth'] = '***';
+            }
+            Log::info("Sending Bitrix24 REST API request (OAuth)", [
+                'method' => $method,
+                'url' => $url,
+                'params' => $loggedParams,
+            ]);
+
             $response = Http::post($url, $params);
+
+            Log::info("Received Bitrix24 REST API response", [
+                'method' => $method,
+                'status' => $response->status(),
+                'body' => $response->json() ?? $response->body(),
+            ]);
 
             // Handle expired token
             if ($response->status() === 401 || (isset($response->json()['error']) && $response->json()['error'] === 'expired_token')) {
+                Log::info("Bitrix24 token expired or unauthorized. Refreshing token...");
                 $this->refreshToken($account);
+                
                 $params['auth'] = $account->access_token;
+                $loggedParams['auth'] = '***';
+                
+                Log::info("Retrying Bitrix24 REST API request (OAuth)", [
+                    'method' => $method,
+                    'url' => $url,
+                    'params' => $loggedParams,
+                ]);
+
                 $response = Http::post($url, $params);
+
+                Log::info("Received Bitrix24 REST API response (Retry)", [
+                    'method' => $method,
+                    'status' => $response->status(),
+                    'body' => $response->json() ?? $response->body(),
+                ]);
             }
         }
 

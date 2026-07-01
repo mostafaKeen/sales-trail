@@ -46,20 +46,12 @@ class SalestrailWebhookController
 
         $salestrailAccount = $tenant->salestrailAccount;
         
-        // Always dispatch background processing job first to ensure it's logged
-        ProcessSalestrailCallJob::dispatch($tenant->id, $data);
-
         // Optional webhook signature verification
         if ($salestrailAccount && !empty($salestrailAccount->webhook_secret)) {
             $signature = $request->header('X-Salestrail-Signature') ?? '';
             $payload = $request->getContent();
 
             if (!$this->salestrailService->verifyWebhook($payload, $signature, $salestrailAccount->webhook_secret)) {
-                // We'll still dispatch the job for now but log the signature issue
-                Log::warning("Signature verification failed for tenant UUID: {$uuid}. Proceeding with processing for testing purposes.");
-                
-                // If you want to strictly enforce signature, uncomment the return below
-                /*
                 \App\Models\SyncLog::create([
                     'tenant_id' => $tenant->id,
                     'call_id' => $callId,
@@ -71,9 +63,11 @@ class SalestrailWebhookController
                 Log::warning("Unauthorized webhook request for tenant UUID: {$uuid}");
                 \App\Domains\Tenant\TenantContext::clear();
                 return response()->json(['error' => 'Unauthorized signature verification failed.'], 403);
-                */
             }
         }
+
+        // Always dispatch background processing job first to ensure it's logged
+        ProcessSalestrailCallJob::dispatch($tenant->id, $data);
 
         \App\Models\SyncLog::create([
             'tenant_id' => $tenant->id,
